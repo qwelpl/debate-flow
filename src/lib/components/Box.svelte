@@ -25,9 +25,11 @@
 		addNewExtension,
 		deleteBox,
 		newUpdateAction,
-		toggleBoxFormat
+		toggleBoxFormat,
+		setBoxFormatRanges
 	} from '$lib/models/nodeDecorateAction';
 	import { settings } from '$lib/models/settings';
+	import { toggleFormat, shiftFormatRanges, type InlineFormat } from '$lib/models/formatRange';
 	import { folded } from '$lib/models/fold';
 	import Tooltip from './Tooltip.svelte';
 	import Fold from './Fold.svelte';
@@ -139,7 +141,7 @@
 		'control shift': {
 			x: {
 				handle: () => {
-					if (!box?.isExtension) formatSelf('crossed');
+					if (!box?.isExtension) formatSelection('strike');
 				}
 			}
 		},
@@ -153,7 +155,17 @@
 			},
 			b: {
 				handle: () => {
-					if (!box?.isExtension) formatSelf('bold');
+					if (!box?.isExtension) formatSelection('bold');
+				}
+			},
+			i: {
+				handle: () => {
+					if (!box?.isExtension) formatSelection('italic');
+				}
+			},
+			u: {
+				handle: () => {
+					if (!box?.isExtension) formatSelection('underline');
 				}
 			},
 			e: {
@@ -318,6 +330,40 @@
 		if (boxId == null) return;
 		toggleBoxFormat(boxId, format);
 		updateNodeData();
+	}
+
+	// Apply a format to the selected text if there is a selection, otherwise to
+	// the whole cell. Bold and strikethrough keep their legacy whole-box flags
+	// when nothing is selected; italic/underline cover the whole content instead.
+	function formatSelection(format: InlineFormat) {
+		const boxId = checkIdBox($nodes, id);
+		if (boxId == null || box == null) return;
+		const sel = textarea?.getSelection?.();
+		let start: number;
+		let end: number;
+		if (sel != null && sel.end > sel.start) {
+			start = sel.start;
+			end = sel.end;
+		} else if (format === 'bold') {
+			formatSelf('bold');
+			return;
+		} else if (format === 'strike') {
+			formatSelf('crossed');
+			return;
+		} else {
+			// no selection: cover the whole cell
+			start = 0;
+			end = box.content.length;
+			if (end === 0) return;
+		}
+		const formatRanges = toggleFormat(box.formatRanges, format, start, end);
+		setBoxFormatRanges(boxId, formatRanges);
+		updateNodeData();
+		// re-apply focus + selection, which the store update dropped
+		requestAnimationFrame(() => {
+			textarea?.focus?.();
+			textarea?.setSelection?.(start, end);
+		});
 	}
 
 	function addChild(childIndex: number, direction: number): boolean {
@@ -528,7 +574,9 @@
 				const boxId = checkIdBox($nodes, id);
 				if (boxId == null) return { tag: 'identity' };
 				editAlreadyPending = false;
-				return newUpdateAction(boxId, { ...box, content });
+				// keep inline format spans aligned to the edited text
+				const formatRanges = shiftFormatRanges(box.content, content, box.formatRanges);
+				return newUpdateAction(boxId, { ...box, content, formatRanges });
 			}
 		};
 	}
@@ -613,6 +661,7 @@
 							on:focus={handleFocus}
 							bind:value={content}
 							bold={box.bold ? true : false}
+							formatRanges={box.formatRanges}
 							bind:this={textarea}
 							on:beforeinput={handleBeforeInput}
 							bind:autoHeight={updateTextHeight}

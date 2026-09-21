@@ -59,6 +59,8 @@ export type Box = {
 	empty?: boolean;
 	crossed?: boolean;
 	bold?: boolean;
+	// inline formatting spans: per-format half-open [start, end) character ranges within `content`
+	formatRanges?: import('./formatRange').FormatRanges;
 	isExtension?: boolean;
 };
 

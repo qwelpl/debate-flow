@@ -166,6 +166,18 @@ export const toggleBoxFormat = decorate(function (
 	};
 });
 
+export const setBoxFormatRanges = decorate(function (
+	nodes: Nodes,
+	id: BoxId,
+	formatRanges: import('./formatRange').FormatRanges
+) {
+	const box = getNode(nodes, id).unwrap();
+	return {
+		action: newUpdateAction(id, { ...box.value, formatRanges }),
+		owner: getParentFlowId(nodes, id).unwrap()
+	};
+});
+
 export function newUpdateAction<Value extends Flow | Box>(
 	id: SelfIdFor<Value>,
 	value: Value
